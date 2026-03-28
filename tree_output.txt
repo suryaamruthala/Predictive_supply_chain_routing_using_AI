@@ -1,0 +1,92 @@
+├── admin
+│   ├── src
+│   │   └── main
+│   │       ├── java
+│   │       │   └── com
+│   │       │       └── supplychain
+│   │       │           └── backend
+│   │       │               ├── config
+│   │       │               │   └── WebSocketConfig.java
+│   │       │               ├── controller
+│   │       │               │   ├── AlertController.java
+│   │       │               │   ├── ShipmentController.java
+│   │       │               │   └── UserController.java
+│   │       │               ├── entity
+│   │       │               │   ├── Alert.java
+│   │       │               │   ├── AppUser.java
+│   │       │               │   ├── Geofence.java
+│   │       │               │   ├── RiskLog.java
+│   │       │               │   ├── Route.java
+│   │       │               │   ├── Shipment.java
+│   │       │               │   └── TrackingEvent.java
+│   │       │               ├── repository
+│   │       │               │   ├── AlertRepository.java
+│   │       │               │   ├── AppUserRepository.java
+│   │       │               │   ├── GeofenceRepository.java
+│   │       │               │   ├── RiskLogRepository.java
+│   │       │               │   ├── RouteRepository.java
+│   │       │               │   ├── ShipmentRepository.java
+│   │       │               │   └── TrackingEventRepository.java
+│   │       │               ├── service
+│   │       │               │   ├── AiIntegrationService.java
+│   │       │               │   ├── RouteService.java
+│   │       │               │   ├── ShipmentService.java
+│   │       │               │   └── TrackingSimulatorService.java
+│   │       │               └── BackendApplication.java
+│   │       └── resources
+│   │           └── application.properties
+│   └── pom.xml
+├── ai-service
+│   ├── main.py
+│   └── requirements.txt
+├── backend
+├── database
+│   └── schema.sql
+├── public
+│   ├── public
+│   │   ├── favicon.svg
+│   │   └── icons.svg
+│   ├── src
+│   │   ├── assets
+│   │   │   ├── hero.png
+│   │   │   ├── react.svg
+│   │   │   └── vite.svg
+│   │   ├── components
+│   │   │   ├── AdminDashboard.jsx
+│   │   │   ├── AdminLogin.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── ForgotPassword.jsx
+│   │   │   ├── KPIBoard.jsx
+│   │   │   ├── LanguageSelector.jsx
+│   │   │   ├── MapComponent.jsx
+│   │   │   ├── ProtectedRoute.jsx
+│   │   │   ├── SettingsTab.jsx
+│   │   │   ├── ShipmentManagement.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── UserLogin.jsx
+│   │   │   ├── UserManagementTab.jsx
+│   │   │   └── UserRegister.jsx
+│   │   ├── hooks
+│   │   │   └── useShipmentTracking.js
+│   │   ├── pages
+│   │   │   └── Dashboard.jsx
+│   │   ├── utils
+│   │   │   └── pdfReports.js
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── i18n.js
+│   │   ├── index.css
+│   │   └── main.jsx
+│   ├── .gitignore
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── tailwind.config.js
+│   └── vite.config.js
+├── README.md
+├── package-lock.json
+├── touch .gitignore
+└── tree.py
