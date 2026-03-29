@@ -106,12 +106,6 @@ const Dashboard = () => {
             <option value="hi">हिंदी</option>
             <option value="te">తెలుగు</option>
             </select>
-            <Link
-                to="/admin"
-                className="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 hover:from-purple-600/40 hover:to-indigo-600/40 text-purple-300 font-semibold py-2 px-4 rounded-lg flex items-center gap-2 border border-purple-500/30 transition-all"
-            >
-                <Shield className="w-4 h-4" /> Admin Portal
-            </Link>
         </div>
       </div>
 

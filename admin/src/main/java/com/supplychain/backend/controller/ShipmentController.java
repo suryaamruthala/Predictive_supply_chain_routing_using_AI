@@ -38,6 +38,12 @@ public class ShipmentController {
         return shipmentService.updateShipment(id, shipment);
     }
 
+    /* 🔥 LIVE TRACKING API */
+    @PostMapping("/{id}/move")
+    public Shipment moveShipment(@PathVariable Long id) {
+        return shipmentService.moveShipment(id);
+    }
+
     @PostMapping("/{id}/reroute")
     public ResponseEntity<Shipment> rerouteShipment(@PathVariable Long id) {
         Shipment rerouted = shipmentService.forceReroute(id);
@@ -66,4 +72,3 @@ public class ShipmentController {
         return ResponseEntity.ok(s);
     }
 }
-

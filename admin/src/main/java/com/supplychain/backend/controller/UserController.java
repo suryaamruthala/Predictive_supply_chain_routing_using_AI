@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 
 @RestController
 @RequestMapping("/api/users")
@@ -19,6 +21,9 @@ public class UserController {
     @Autowired
     private AppUserRepository userRepository;
 
+    @Autowired
+    private JavaMailSender mailSender;
+
     @GetMapping
     public List<AppUser> getAllUsers() {
         return userRepository.findAll();
@@ -26,10 +31,22 @@ public class UserController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody AppUser user) {
-        return userRepository.findByUsername(user.getUsername())
-                .filter(u -> u.getPassword().equals(user.getPassword()))
+        String identifier = user.getUsername();
+        String password = user.getPassword();
+
+        if (identifier == null || password == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Username/email and password are required"));
+        }
+
+        // Determine lookup strategy: email if the identifier contains '@', otherwise username
+        java.util.Optional<AppUser> found = identifier.contains("@")
+                ? userRepository.findByEmail(identifier)
+                : userRepository.findByUsername(identifier);
+
+        return found
+                .filter(u -> u.getPassword().equals(password))
                 .map(u -> ResponseEntity.ok((Object) u))
-                .orElse(ResponseEntity.status(401).body(Map.of("error", "Invalid username or password")));
+                .orElse(ResponseEntity.status(401).body(Map.of("error", "Invalid username/email or password")));
     }
 
     @PostMapping("/register")
@@ -55,11 +72,21 @@ public class UserController {
                     String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
                     u.setResetToken(token);
                     userRepository.save(u);
-                    // In production this would send an email. For demo, we return the token directly.
+                    
+                    try {
+                        SimpleMailMessage message = new SimpleMailMessage();
+                        message.setTo(email);
+                        message.setSubject("Password Reset Request");
+                        message.setText("Hello " + u.getUsername() + ",\n\n" +
+                                "Your password reset token is: " + token + "\n\n" +
+                                "Please use this token to reset your password.");
+                        mailSender.send(message);
+                    } catch (Exception e) {
+                        return ResponseEntity.internalServerError().body(Map.of("error", "Failed to send email"));
+                    }
+
                     return ResponseEntity.ok((Object) Map.of(
-                        "message", "Reset token generated. Check your email.",
-                        "token", token,   // Remove in production
-                        "username", u.getUsername()
+                        "message", "Reset token generated. Check your email."
                     ));
                 })
                 .orElse(ResponseEntity.badRequest().body(Map.of("error", "No account found with that email")));

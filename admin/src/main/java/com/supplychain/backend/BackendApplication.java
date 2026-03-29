@@ -29,6 +29,7 @@ public class BackendApplication {
 				shipment.setCurrentLng(72.8777);
 				shipment.setRiskScore(10);
 				shipment.setEstimatedDelivery(LocalDateTime.now().plusDays(2));
+				shipment.setUsername("admin"); // Linked to default admin for tracking
 				
 				// A simple mock polyline from Mumbai to Pune to Ahmedabad to Delhi to simulate some motion
 				String polylineJson = "[\n" +
@@ -45,7 +46,7 @@ public class BackendApplication {
 
 				repository.save(shipment);
 				
-				System.out.println("Seeded database with demo shipment TRK#9921");
+				System.out.println("Seeded database with demo shipment TRK#9921 linked to user 'admin'");
 			}
 		};
 	}

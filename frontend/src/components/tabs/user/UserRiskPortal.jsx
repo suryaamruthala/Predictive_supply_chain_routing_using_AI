@@ -1,59 +1,189 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Circle } from 'react-leaflet';
+import React, { useState } from 'react';
+import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Search } from 'lucide-react';
-import { MapFocuser } from '../../../utils/mapUtils';
 
-const UserRiskPortal = ({ 
-    searchQuery, 
-    setSearchQuery, 
-    handleGlobalSearch, 
-    targetLocation, 
-    calculatedRisk, 
-    riskDetails, 
-    isFollowing, 
-    setIsFollowing, 
-    heatmapZones 
-}) => {
-    return (
-        <div className="h-full relative overflow-hidden flex flex-col">
-            <div className="absolute top-10 right-10 z-[1010] w-[300px]">
-                <form onSubmit={(e) => { e.preventDefault(); handleGlobalSearch(searchQuery); }} className="relative flex items-center bg-[#1e293b]/95 backdrop-blur-3xl border border-white/10 rounded-2xl px-4 h-12 shadow-2xl overflow-hidden">
-                    <Search className="w-4 h-4 text-slate-500 mr-3"/>
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="SEARCH VILLAGE..." className="bg-transparent border-none outline-none text-white text-[11px] font-bold placeholder-slate-600 flex-1 uppercase tracking-tight" />
-                </form>
-            </div>
-            {targetLocation && calculatedRisk && riskDetails && (
-                <div className="absolute top-36 right-10 z-[1010] w-[340px] animate-in slide-in-from-right-10 duration-700 bg-[#1e293b]/98 backdrop-blur-3xl border border-slate-700 rounded-[30px] p-8 shadow-3xl">
-                    <h3 className="text-xl font-black text-white italic tracking-tighter uppercase mb-6 line-clamp-1">{targetLocation.name}</h3>
-                    <div className="flex flex-col items-center mb-8">
-                        <div className="relative w-36 h-36 flex items-center justify-center">
-                            <div className="absolute inset-0 rounded-full border-[6px] border-slate-800" />
-                            <div className={`absolute inset-0 rounded-full border-[6px] border-transparent border-t-red-500 animate-spin-slow`} />
-                            <span className="text-4xl font-mono font-black italic text-red-500">{calculatedRisk}%</span>
-                        </div>
-                    </div>
-                    <div className="space-y-3">
-                        <div className="p-4 bg-white/5 rounded-2xl flex justify-between uppercase font-bold text-[10px] text-slate-400"><span>Stability</span><span className="text-white">{riskDetails.stability}</span></div>
-                        <div className="p-4 bg-white/5 rounded-2xl flex justify-between uppercase font-bold text-[10px] text-slate-400"><span>Meteorological</span><span className="text-white">{riskDetails.meteorological}</span></div>
-                        <p className="text-[10px] text-blue-400 italic border-l border-blue-500 pl-4">{riskDetails.description}</p>
-                    </div>
-                </div>
-            )}
-            <div className="flex-1 rounded-3xl overflow-hidden border border-slate-800 relative">
-                <MapContainer center={[20, 40]} zoom={3} style={{ height: '100%', width: '100%' }} zoomControl={false}>
-                    <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" className="contrast-110 brightness-75 grayscale-[20%]" />
-                    <MapFocuser center={targetLocation ? [targetLocation.lat, targetLocation.lng] : null} isFollowing={isFollowing} setIsFollowing={setIsFollowing} targetId={targetLocation ? targetLocation.name : null} zoom={targetLocation ? 10 : 3} />
-                    {heatmapZones.map(z => (
-                        <Circle key={z.id} center={[z.lat, z.lng]} radius={z.radius_km * 1000} pathOptions={{ fillColor: z.type === 'WAR' ? '#ef4444' : '#3b82f6', color: 'transparent', fillOpacity: 0.35 }} />
-                    ))}
-                    {targetLocation && (
-                        <Marker position={[targetLocation.lat, targetLocation.lng]} icon={new L.DivIcon({ className: 'ping', html: `<div class="w-10 h-10 border-2 border-blue-500 rounded-full animate-ping"></div>` })} />
-                    )}
-                </MapContainer>
-            </div>
+/* ------------------ MAP FLY ------------------ */
+const MapMover = ({ location }) => {
+  const map = useMap();
+
+  React.useEffect(() => {
+    if (location) {
+      map.flyTo([location.lat, location.lng], 12, { duration: 2 });
+    }
+  }, [location, map]);
+
+  return null;
+};
+
+/* ------------------ RISK COLOR ------------------ */
+const getRiskColor = (risk) => {
+  if (risk > 70) return "from-red-500 to-red-700";
+  if (risk > 40) return "from-yellow-400 to-yellow-600";
+  return "from-green-400 to-green-600";
+};
+
+/* ------------------ MAIN ------------------ */
+const UserRiskPortal = ({ heatmapZones }) => {
+
+  const [query, setQuery] = useState('');
+  const [location, setLocation] = useState(null);
+
+  const [currentRisk, setCurrentRisk] = useState(null);
+  const [futureRisk, setFutureRisk] = useState(null);
+  const [riskDetails, setRiskDetails] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+
+  /* ------------------ SEARCH ------------------ */
+  const handleSearch = async () => {
+
+    if (!query) return;
+
+    try {
+      const geoRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
+      );
+      const geoData = await geoRes.json();
+
+      if (!geoData.length) return alert("Location not found");
+
+      const lat = parseFloat(geoData[0].lat);
+      const lng = parseFloat(geoData[0].lon);
+
+      const loc = { name: query, lat, lng };
+      setLocation(loc);
+
+      const res = await fetch("http://localhost:8000/predict-risk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loc)
+      });
+
+      const data = await res.json();
+
+      setCurrentRisk(data.current_risk);
+      setFutureRisk(data.future_risk);
+      setRiskDetails(data.factors);
+
+      const recs = [];
+      if (data.future_risk > 70) recs.push("🚫 Avoid travel");
+      if (data.factors.weather > 60) recs.push("🌧 Weather unstable");
+      if (data.factors.traffic > 60) recs.push("🚗 Traffic heavy");
+      if (!recs.length) recs.push("✅ Safe route");
+
+      setRecommendations(recs);
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="h-full bg-black text-white relative overflow-hidden">
+
+      {/* 🔍 SEARCH */}
+      <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[1000] w-[360px]">
+        <div className="flex bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl p-3 shadow-lg">
+
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search city / village..."
+            className="bg-transparent outline-none flex-1 text-white"
+          />
+
+          <button onClick={handleSearch}>
+            <Search className="text-gray-400" />
+          </button>
+
         </div>
-    );
+      </div>
+
+      {/* 📊 RISK PANEL */}
+      {location && (
+        <div className="absolute top-1/2 right-10 -translate-y-1/2 z-[1000] w-[340px] bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl">
+
+          <h3 className="text-lg font-bold mb-6">📍 {location.name}</h3>
+
+          {/* 🔥 CIRCULAR RISK */}
+          <div className="flex justify-center mb-6">
+
+            <div className={`w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br ${getRiskColor(currentRisk)} shadow-[0_0_40px_rgba(255,0,0,0.3)] animate-pulse`}>
+
+              <span className="text-3xl font-bold">
+                {currentRisk}%
+              </span>
+
+            </div>
+
+          </div>
+
+          {/* FUTURE */}
+          <div className="flex justify-between mb-4 text-sm">
+            <span>Future Risk</span>
+            <span className="text-yellow-400">{futureRisk}%</span>
+          </div>
+
+          {/* FACTORS */}
+          {riskDetails && (
+            <div className="space-y-2 text-xs mb-4 text-gray-300">
+              <p>🌦 Weather: {riskDetails.weather}%</p>
+              <p>🚗 Traffic: {riskDetails.traffic}%</p>
+              <p>🌍 Geo: {riskDetails.geopolitics}%</p>
+            </div>
+          )}
+
+          {/* RECOMMENDATIONS */}
+          <div>
+            <p className="text-blue-400 text-xs mb-2">AI Recommendations</p>
+            {recommendations.map((r, i) => (
+              <p key={i} className="text-xs">{r}</p>
+            ))}
+          </div>
+
+        </div>
+      )}
+
+      {/* 🗺️ MAP */}
+      <div className="h-full m-4 rounded-3xl overflow-hidden border border-white/10">
+
+        <MapContainer center={[20, 78]} zoom={4} style={{ height: "100%" }}>
+
+          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+
+          <MapMover location={location} />
+
+          {/* 🔥 HEATMAP WITH ANIMATION */}
+          {heatmapZones.map(z => (
+            <Circle
+              key={z.id}
+              center={[z.lat, z.lng]}
+              radius={z.radius_km * 1000}
+              pathOptions={{
+                fillColor: z.intensity > 70 ? "#ef4444" : "#3b82f6",
+                fillOpacity: 0.3,
+                color: "transparent"
+              }}
+              className="animate-pulse"
+            />
+          ))}
+
+          {/* TARGET */}
+          {location && (
+            <Marker
+              position={[location.lat, location.lng]}
+              icon={new L.DivIcon({
+                html: `<div class="w-5 h-5 bg-blue-500 rounded-full shadow-[0_0_20px_#3b82f6]"></div>`
+              })}
+            />
+          )}
+
+        </MapContainer>
+
+      </div>
+
+    </div>
+  );
 };
 
 export default UserRiskPortal;

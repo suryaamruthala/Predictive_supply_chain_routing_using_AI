@@ -41,6 +41,8 @@ public class Shipment {
     private String modeJustification;
 
     private Integer currentRouteIndex;
+    
+    private String username; // Captured for user-specific tracking
 
     private Double carbonEmissions;
 
@@ -112,6 +114,9 @@ public class Shipment {
 
     public Integer getCurrentRouteIndex() { return currentRouteIndex; }
     public void setCurrentRouteIndex(Integer currentRouteIndex) { this.currentRouteIndex = currentRouteIndex; }
+
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
     public Double getCarbonEmissions() { return carbonEmissions; }
     public void setCarbonEmissions(Double carbonEmissions) { this.carbonEmissions = carbonEmissions; }

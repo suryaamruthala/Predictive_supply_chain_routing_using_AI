@@ -1,226 +1,220 @@
 package com.supplychain.backend.service;
 
-import com.supplychain.backend.entity.Alert;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supplychain.backend.entity.Shipment;
-import com.supplychain.backend.repository.AlertRepository;
 import com.supplychain.backend.repository.ShipmentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 @Service
 public class ShipmentService {
 
     @Autowired
     private ShipmentRepository shipmentRepository;
-    
-    @Autowired
-    private AiIntegrationService aiIntegrationService;
 
     @Autowired
-    private AlertRepository alertRepository;
+    private AiIntegrationService aiIntegrationService; // 🔥 IMPORTANT
+
+    @Autowired
+    private AlertService alertService; // 🔥 Auto-Alert generation
+
+    /* ------------------ GET ------------------ */
 
     public List<Shipment> getAllShipments() {
         return shipmentRepository.findAll();
     }
 
     public Shipment getShipmentById(Long id) {
-        return shipmentRepository.findById(id).orElseThrow(() -> new RuntimeException("Shipment not found"));
+        return shipmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Shipment not found"));
     }
+
+    /* ------------------ CREATE ------------------ */
 
     public Shipment createShipment(Shipment shipment) {
+
         shipment.setStatus("IN_TRANSIT");
-        shipment.setRiskScore(5); // Baseline initial risk
-        
+        shipment.setCurrentRouteIndex(0);
+
         try {
-            // Immediately ask AI for the safest live route overriding current risk heatmaps
-            Map<String, Object> aiResponse = aiIntegrationService.calculateRoute(shipment.getOrigin(), shipment.getDestination());
-            
+            Map<String, Object> aiResponse = aiIntegrationService.calculateRoute(
+                    shipment.getOrigin(),
+                    shipment.getDestination());
+
+            ObjectMapper mapper = new ObjectMapper();
+
             if (aiResponse.containsKey("polyline")) {
-                List<Map<String, Object>> polylineList = (List<Map<String, Object>>) aiResponse.get("polyline");
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                shipment.setActiveRoutePolyline(mapper.writeValueAsString(polylineList));
-                
-                if (aiResponse.containsKey("standard_polyline")) {
-                    List<Map<String, Object>> stdPolylineList = (List<Map<String, Object>>) aiResponse.get("standard_polyline");
-                    shipment.setStandardRoutePolyline(mapper.writeValueAsString(stdPolylineList));
-                }
+                shipment.setActiveRoutePolyline(
+                        mapper.writeValueAsString(aiResponse.get("polyline")));
 
-                if (aiResponse.containsKey("selected_mode")) {
-                    shipment.setTransportMode(aiResponse.get("selected_mode").toString());
-                }
+                // set initial position
+                List<Map<String, Object>> route = (List<Map<String, Object>>) aiResponse.get("polyline");
 
-                if (aiResponse.containsKey("total_cost_inr")) {
-                    shipment.setTotalCostInr(Double.valueOf(aiResponse.get("total_cost_inr").toString()));
-                }
-
-                if (aiResponse.containsKey("mode_justification")) {
-                    shipment.setModeJustification(aiResponse.get("mode_justification").toString());
-                }
-
-                if (aiResponse.containsKey("carbon_emissions_kg")) {
-                    shipment.setCarbonEmissions(Double.valueOf(aiResponse.get("carbon_emissions_kg").toString()));
-                }
-
-                if (aiResponse.containsKey("total_risk")) {
-                    shipment.setRiskScore(Double.valueOf(aiResponse.get("total_risk").toString()).intValue());
-                }
-
-                if (aiResponse.containsKey("alternatives")) {
-                    List<Map<String, Object>> alternatives = (List<Map<String, Object>>) aiResponse.get("alternatives");
-                    shipment.setAlternateRoutesData(mapper.writeValueAsString(alternatives));
-                }
-
-                shipment.setCurrentRouteIndex(0);
-                if (!polylineList.isEmpty()) {
-                    Map<String, Object> firstPoint = polylineList.get(0);
-                    shipment.setCurrentLat(Double.parseDouble(firstPoint.get("lat").toString()));
-                    shipment.setCurrentLng(Double.parseDouble(firstPoint.get("lng").toString()));
+                if (!route.isEmpty()) {
+                    Map<String, Object> first = route.get(0);
+                    shipment.setCurrentLat(Double.valueOf(first.get("lat").toString()));
+                    shipment.setCurrentLng(Double.valueOf(first.get("lng").toString()));
                 }
             }
+
+            if (aiResponse.containsKey("total_risk")) {
+                shipment.setRiskScore(Double.valueOf(aiResponse.get("total_risk").toString()).intValue());
+            }
+
+            if (aiResponse.containsKey("justification")) {
+                shipment.setModeJustification(aiResponse.get("justification").toString());
+            }
+
+            if (aiResponse.containsKey("transport_mode")) {
+                shipment.setTransportMode(aiResponse.get("transport_mode").toString());
+            }
+
+            if (aiResponse.containsKey("estimated_cost_inr")) {
+                shipment.setTotalCostInr(Double.valueOf(aiResponse.get("estimated_cost_inr").toString()));
+            }
+
+            if (aiResponse.containsKey("carbon_emissions_kg")) {
+                shipment.setCarbonEmissions(Double.valueOf(aiResponse.get("carbon_emissions_kg").toString()));
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
-            System.err.println("Could not establish AI route for new shipment. It will remain stationary.");
+
+            // fallback
+            shipment.setCurrentLat(20.0);
+            shipment.setCurrentLng(78.0);
         }
-        
-        return shipmentRepository.save(shipment);
+
+        Shipment savedShipment = shipmentRepository.save(shipment);
+
+        // 🔥 Auto-generate alert if AI assigns high risk on creation
+        if (savedShipment.getRiskScore() != null && savedShipment.getRiskScore() > 30) {
+            alertService.generateShipmentAlert(savedShipment, "admin@supplychain.ai", "Initial Route Assignment");
+        }
+
+        return savedShipment;
     }
 
-    public Shipment updateShipment(Long id, Shipment shipmentDetails) {
-        Shipment shipment = getShipmentById(id);
-        // Core fields
-        if (shipmentDetails.getRiskScore() != null)    shipment.setRiskScore(shipmentDetails.getRiskScore());
-        if (shipmentDetails.getStatus() != null)       shipment.setStatus(shipmentDetails.getStatus());
-        if (shipmentDetails.getCurrentLat() != null)   shipment.setCurrentLat(shipmentDetails.getCurrentLat());
-        if (shipmentDetails.getCurrentLng() != null)   shipment.setCurrentLng(shipmentDetails.getCurrentLng());
-        if (shipmentDetails.getName() != null)         shipment.setName(shipmentDetails.getName());
-        if (shipmentDetails.getOrigin() != null)       shipment.setOrigin(shipmentDetails.getOrigin());
-        if (shipmentDetails.getDestination() != null)  shipment.setDestination(shipmentDetails.getDestination());
-        if (shipmentDetails.getEstimatedDelivery() != null) shipment.setEstimatedDelivery(shipmentDetails.getEstimatedDelivery());
-        // Reroute / AI route fields
-        if (shipmentDetails.getIsRerouted() != null)              shipment.setIsRerouted(shipmentDetails.getIsRerouted());
-        if (shipmentDetails.getActiveRoutePolyline() != null)     shipment.setActiveRoutePolyline(shipmentDetails.getActiveRoutePolyline());
-        if (shipmentDetails.getStandardRoutePolyline() != null)   shipment.setStandardRoutePolyline(shipmentDetails.getStandardRoutePolyline());
-        if (shipmentDetails.getRerouteAlertData() != null)        shipment.setRerouteAlertData(shipmentDetails.getRerouteAlertData());
-        if (shipmentDetails.getAlternateRoutesData() != null)     shipment.setAlternateRoutesData(shipmentDetails.getAlternateRoutesData());
-        if (shipmentDetails.getTransportMode() != null)           shipment.setTransportMode(shipmentDetails.getTransportMode());
-        if (shipmentDetails.getTotalCostInr() != null)            shipment.setTotalCostInr(shipmentDetails.getTotalCostInr());
-        if (shipmentDetails.getModeJustification() != null)       shipment.setModeJustification(shipmentDetails.getModeJustification());
-        if (shipmentDetails.getCarbonEmissions() != null)         shipment.setCarbonEmissions(shipmentDetails.getCarbonEmissions());
-        return shipmentRepository.save(shipment);
+    /* ------------------ UPDATE ------------------ */
+
+    public Shipment updateShipment(Long id, Shipment updated) {
+        Shipment s = getShipmentById(id);
+
+        if (updated.getCurrentLat() != null)
+            s.setCurrentLat(updated.getCurrentLat());
+
+        if (updated.getCurrentLng() != null)
+            s.setCurrentLng(updated.getCurrentLng());
+
+        if (updated.getStatus() != null)
+            s.setStatus(updated.getStatus());
+
+        if (updated.getRiskScore() != null)
+            s.setRiskScore(updated.getRiskScore());
+
+        return shipmentRepository.save(s);
     }
+
+    /* ------------------ LIVE MOVEMENT ------------------ */
+
+    public Shipment moveShipment(Long id) {
+        Shipment s = getShipmentById(id);
+
+        try {
+            if (s.getActiveRoutePolyline() == null)
+                return s;
+
+            ObjectMapper mapper = new ObjectMapper();
+
+            List<Map<String, Object>> route = mapper.readValue(s.getActiveRoutePolyline(), List.class);
+
+            int index = s.getCurrentRouteIndex() == null ? 0 : s.getCurrentRouteIndex();
+
+            if (index < route.size() - 1) {
+                index++;
+
+                Map<String, Object> point = route.get(index);
+
+                s.setCurrentRouteIndex(index);
+                s.setCurrentLat(Double.valueOf(point.get("lat").toString()));
+                s.setCurrentLng(Double.valueOf(point.get("lng").toString()));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return shipmentRepository.save(s);
+    }
+
+    /* ------------------ REROUTE (FIXED ERROR) ------------------ */
 
     public Shipment forceReroute(Long id) {
         Shipment shipment = getShipmentById(id);
+
         try {
-            Map<String, Object> aiResponse = aiIntegrationService.calculateRoute(shipment.getOrigin(), shipment.getDestination());
-            
+            Map<String, Object> aiResponse = aiIntegrationService.calculateRoute(
+                    shipment.getOrigin(),
+                    shipment.getDestination());
+
+            ObjectMapper mapper = new ObjectMapper();
+
             if (aiResponse.containsKey("polyline")) {
-                List<Map<String, Object>> polylineList = (List<Map<String, Object>>) aiResponse.get("polyline");
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                shipment.setActiveRoutePolyline(mapper.writeValueAsString(polylineList));
-                
-                if (aiResponse.containsKey("standard_polyline")) {
-                    shipment.setStandardRoutePolyline(mapper.writeValueAsString(aiResponse.get("standard_polyline")));
-                }
-
-                if (aiResponse.containsKey("selected_mode")) {
-                    shipment.setTransportMode(aiResponse.get("selected_mode").toString());
-                }
-
-                if (aiResponse.containsKey("total_cost_inr")) {
-                    shipment.setTotalCostInr(Double.valueOf(aiResponse.get("total_cost_inr").toString()));
-                }
-
-                if (aiResponse.containsKey("mode_justification")) {
-                    shipment.setModeJustification(aiResponse.get("mode_justification").toString());
-                }
+                shipment.setActiveRoutePolyline(
+                        mapper.writeValueAsString(aiResponse.get("polyline")));
 
                 shipment.setIsRerouted(true);
-                if (aiResponse.containsKey("total_risk")) {
-                    shipment.setRiskScore(Double.valueOf(aiResponse.get("total_risk").toString()).intValue());
-                }
+                shipment.setCurrentRouteIndex(0);
 
-                if (aiResponse.containsKey("alternatives")) {
-                    List<Map<String, Object>> alternatives = (List<Map<String, Object>>) aiResponse.get("alternatives");
-                    shipment.setAlternateRoutesData(mapper.writeValueAsString(alternatives));
-                }
-                
-                String currentAlerts = shipment.getRerouteAlertData();
-                List<String> alerts;
-                if (currentAlerts != null && !currentAlerts.isEmpty()) {
-                    alerts = mapper.readValue(currentAlerts, new com.fasterxml.jackson.core.type.TypeReference<List<String>>(){});
-                } else {
-                    alerts = new java.util.ArrayList<>();
-                }
-                
-                // Add AI-specific alerts if returned
-                if (aiResponse.containsKey("alerts")) {
-                    List<String> aiAlerts = (List<String>) aiResponse.get("alerts");
-                    for (String alertMsg : aiAlerts) {
-                        if (!alerts.contains(alertMsg)) alerts.add(alertMsg);
-                    }
-                }
-                
-                alerts.add("ADMIN OVERRIDE: Forced path recalculation executed. New grid secured.");
-                shipment.setRerouteAlertData(mapper.writeValueAsString(alerts));
+                List<Map<String, Object>> route = (List<Map<String, Object>>) aiResponse.get("polyline");
 
-                // Persist reroute alert to database
-                Alert dbAlert = new Alert();
-                dbAlert.setType("REROUTE");
-                dbAlert.setShipmentId(String.valueOf(shipment.getId()));
-                dbAlert.setCargoName(shipment.getName());
-                dbAlert.setMessage("AI REROUTE: Forced path recalculation for dispatch "
-                        + shipment.getName() + " (" + shipment.getOrigin() + " → "
-                        + shipment.getDestination() + "). Risk: "
-                        + shipment.getRiskScore() + "%.");
-                dbAlert.setSeverity(shipment.getRiskScore() != null && shipment.getRiskScore() > 60 ? "CRITICAL" : "HIGH");
-                dbAlert.setCreatedAt(LocalDateTime.now());
-                alertRepository.save(dbAlert);
-
-                // If admin-selected route still has risk > 30%, create an additional ROUTE_RISK alert
-                if (shipment.getRiskScore() != null && shipment.getRiskScore() > 30) {
-                    Alert riskAlert = new Alert();
-                    riskAlert.setType("ROUTE_RISK");
-                    riskAlert.setShipmentId(String.valueOf(shipment.getId()));
-                    riskAlert.setCargoName(shipment.getName());
-                    String severity = shipment.getRiskScore() > 60 ? "CRITICAL" : shipment.getRiskScore() > 45 ? "HIGH" : "MEDIUM";
-                    riskAlert.setSeverity(severity);
-                    riskAlert.setMessage("⚠ HIGH-RISK ROUTE SELECTED: Admin-selected route for dispatch "
-                            + shipment.getName() + " (" + shipment.getOrigin() + " → "
-                            + shipment.getDestination() + ") carries a risk score of "
-                            + shipment.getRiskScore() + "% — exceeding the 30% safety threshold. Immediate review recommended.");
-                    riskAlert.setCreatedAt(LocalDateTime.now());
-                    alertRepository.save(riskAlert);
+                if (!route.isEmpty()) {
+                    Map<String, Object> first = route.get(0);
+                    shipment.setCurrentLat(Double.valueOf(first.get("lat").toString()));
+                    shipment.setCurrentLng(Double.valueOf(first.get("lng").toString()));
                 }
-                
-                return shipmentRepository.save(shipment);
             }
+
+            if (aiResponse.containsKey("total_risk")) {
+                shipment.setRiskScore(Double.valueOf(aiResponse.get("total_risk").toString()).intValue());
+            }
+
+            if (aiResponse.containsKey("justification")) {
+                shipment.setModeJustification(aiResponse.get("justification").toString());
+            }
+
+            if (aiResponse.containsKey("transport_mode")) {
+                shipment.setTransportMode(aiResponse.get("transport_mode").toString());
+            }
+
+            if (aiResponse.containsKey("estimated_cost_inr")) {
+                shipment.setTotalCostInr(Double.valueOf(aiResponse.get("estimated_cost_inr").toString()));
+            }
+
+            if (aiResponse.containsKey("carbon_emissions_kg")) {
+                shipment.setCarbonEmissions(Double.valueOf(aiResponse.get("carbon_emissions_kg").toString()));
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return shipment;
+
+        Shipment savedShipment = shipmentRepository.save(shipment);
+
+        // 🔥 Auto-generate alert if the forced reroute is still risky
+        if (savedShipment.getRiskScore() != null && savedShipment.getRiskScore() > 30) {
+            alertService.generateShipmentAlert(savedShipment, "admin@supplychain.ai", "Admin Forced Reroute");
+        }
+
+        return savedShipment;
     }
 
-    @jakarta.transaction.Transactional
+    /* ------------------ DELETE ------------------ */
+
     public void deleteShipment(Long id) {
-        Long nonNullId = Objects.requireNonNull(id, "Shipment id must not be null.");
-        // Verify shipment exists first
-        if (!shipmentRepository.existsById(nonNullId)) {
-            throw new RuntimeException("Shipment with id " + nonNullId + " not found.");
-        }
-        // Delete related alerts first (no JPA cascade from Shipment side — stored by string ID)
-        try {
-            alertRepository.deleteByShipmentId(String.valueOf(id));
-        } catch (Exception e) {
-            System.err.println("Could not delete alerts for shipment " + id + ": " + e.getMessage());
-        }
-        // Delete shipment — JPA CascadeType.ALL handles TrackingEvent, Route, RiskLog
         shipmentRepository.deleteById(id);
-        shipmentRepository.flush();
     }
 }

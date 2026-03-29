@@ -1,0 +1,19 @@
+# Node
+node_modules/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Java / Maven
+target/
+*.jar
+
+# Env files
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db

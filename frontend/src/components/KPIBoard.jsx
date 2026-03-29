@@ -2,23 +2,25 @@ import React from 'react';
 
 const KPIBoard = ({ data }) => {
   return (
-    <div className="glass-panel w-72 flex flex-col gap-4 bg-slate-900/80">
-      <h3 className="border-b border-white/10 pb-2 text-lg font-semibold text-textMain">Metrics Overview</h3>
-      
-      <div className="flex justify-between items-center">
-        <span className="text-textMuted">Active Shipments</span>
-        <span className="text-xl font-bold text-textMain">{data.active}</span>
+    <div className="glass-panel flex flex-col gap-3">
+
+      <h3 className="text-lg font-semibold">📊 Metrics</h3>
+
+      <div className="flex justify-between">
+        <span>Active</span>
+        <span className="text-green-400 font-bold">{data.active}</span>
       </div>
-      
-      <div className="flex justify-between items-center">
-        <span className="text-textMuted">Delayed</span>
-        <span className="text-xl font-bold text-warning">{data.delayed}</span>
+
+      <div className="flex justify-between">
+        <span>Delayed</span>
+        <span className="text-yellow-400 font-bold">{data.delayed}</span>
       </div>
-      
-      <div className="flex justify-between items-center">
-        <span className="text-textMuted">Critical Risk</span>
-        <span className="text-xl font-bold text-danger">{data.critical}</span>
+
+      <div className="flex justify-between">
+        <span>Critical</span>
+        <span className="text-red-500 font-bold">{data.critical}</span>
       </div>
+
     </div>
   );
 };

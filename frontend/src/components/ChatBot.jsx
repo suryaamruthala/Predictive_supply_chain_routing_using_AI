@@ -17,33 +17,37 @@ const ChatBot = () => {
     }, [messages, isTyping]);
 
     const handleSend = async (e) => {
-        e.preventDefault();
-        if (!input.trim()) return;
+    e.preventDefault();
+    if (!input.trim()) return;
 
-        const userMsg = input.trim();
-        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-        setInput('');
-        setIsTyping(true);
+    const userMsg = input.trim();
 
-        // Simulate AI Response logic
-        setTimeout(() => {
-            let response = "";
-            const query = userMsg.toLowerCase();
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setInput('');
+    setIsTyping(true);
 
-            if (query.includes('war') || query.includes('conflict')) {
-                response = "I'm monitoring several high-risk conflict zones, including the Red Sea and Eastern Europe. These areas currently show >90% risk intensity, which may affect shipping transit times.";
-            } else if (query.includes('weather') || query.includes('storm')) {
-                response = "There are major weather anomalies in the North Atlantic and Pacific. Our AI suggests alternate southern routes to avoid potential cyclonic activity.";
-            } else if (query.includes('help') || query.includes('map')) {
-                response = "You are viewing the Global Risk Heatmap. Red zones indicate armed conflict, Cyan indicates weather hazards, and Orange indicates geopolitical tension.";
-            } else {
-                response = "That's an interesting question. As an AI assistant, I can help you analyze global supply chain risks, weather impacts, and geopolitical stressors. Try asking about 'War' or 'Weather'.";
-            }
+    try {
+        const res = await fetch("http://localhost:5000/chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ message: userMsg })
+        });
 
-            setMessages(prev => [...prev, { role: 'ai', text: response }]);
-            setIsTyping(false);
-        }, 1200);
-    };
+        const data = await res.json();
+
+        setMessages(prev => [...prev, { role: 'ai', text: data.reply }]);
+
+    } catch (err) {
+        setMessages(prev => [...prev, {
+            role: 'ai',
+            text: "⚠️ AI service unavailable. Try again later."
+        }]);
+    }
+
+    setIsTyping(false);
+};
 
     return (
         <div className="fixed bottom-6 left-6 z-[100] font-sans">

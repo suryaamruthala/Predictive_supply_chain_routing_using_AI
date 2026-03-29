@@ -5,7 +5,7 @@ import { Eye, EyeOff, Package, LogIn, AlertCircle, Loader2 } from 'lucide-react'
 
 const UserLogin = () => {
     const navigate = useNavigate();
-    const [form, setForm]     = useState({ username: '', password: '' });
+    const [form, setForm]     = useState({ identifier: '', password: '' });
     const [showPwd, setShowPwd] = useState(false);
     const [error, setError]   = useState('');
     const [loading, setLoading] = useState(false);
@@ -17,10 +17,19 @@ const UserLogin = () => {
         setError('');
         setLoading(true);
         try {
-            const res = await axios.post('http://localhost:8080/api/users/login', form);
+            const res = await axios.post('http://localhost:8080/api/users/login', {
+                username: form.identifier,
+                password: form.password,
+            });
             const user = res.data;
             sessionStorage.setItem('currentUser', JSON.stringify(user));
-            navigate('/user/dashboard');
+
+            if (user.role && user.role.toUpperCase() === 'ADMIN') {
+                sessionStorage.setItem('isAdmin', 'true');
+                navigate('/admin/dashboard');
+            } else {
+                navigate('/user/dashboard');
+            }
         } catch (err) {
             setError(err.response?.data?.error || 'Login failed. Please try again.');
         } finally {
@@ -60,12 +69,12 @@ const UserLogin = () => {
                         <div className="flex flex-col gap-1.5">
                             <label className="text-sm font-medium text-gray-300">Username or Email</label>
                             <input
-                                id="login-username"
+                                id="login-identifier"
                                 type="text"
-                                name="username"
-                                value={form.username}
+                                name="identifier"
+                                value={form.identifier}
                                 onChange={handleChange}
-                                placeholder="Enter username or email"
+                                placeholder="Enter your username or email"
                                 required
                                 autoComplete="username"
                                 className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/70 focus:bg-blue-500/5 transition-all text-sm"
@@ -138,13 +147,6 @@ const UserLogin = () => {
                     </p>
                 </div>
 
-                {/* Admin link */}
-                <p className="text-center text-xs text-gray-700 mt-5">
-                    Are you an admin?{' '}
-                    <Link to="/admin" className="text-gray-500 hover:text-gray-400 transition-colors">
-                        Admin portal →
-                    </Link>
-                </p>
             </div>
         </div>
     );

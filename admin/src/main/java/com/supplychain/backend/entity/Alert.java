@@ -8,18 +8,21 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "alerts")
 public class Alert {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String type; // WEATHER, TRAFFIC, GEOPOLITICAL, REROUTE
+    private String type; // WEATHER, TRAFFIC, REROUTE
     private String shipmentId;
     private String cargoName;
-    
+
     @Column(columnDefinition = "TEXT")
     private String message;
-    
+
     private String severity; // CRITICAL, HIGH, MEDIUM
+    private String userEmail;
+
     private LocalDateTime createdAt;
     private boolean dismissed;
 

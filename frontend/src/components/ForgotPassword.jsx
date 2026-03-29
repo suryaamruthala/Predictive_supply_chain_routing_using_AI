@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import { Package, Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, AlertCircle, CheckCircle2, Loader2, Copy } from 'lucide-react';
+import { Package, Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 /* ── Step 1: enter email → get token
    Step 2: enter token + new password → reset ── */
@@ -11,7 +11,6 @@ const ForgotPassword = () => {
     const [step, setStep]         = useState(1);          // 1 = email, 2 = reset
     const [email, setEmail]       = useState('');
     const [token, setToken]       = useState('');
-    const [demoToken, setDemoToken] = useState('');       // returned by backend for demo
     const [newPwd, setNewPwd]     = useState('');
     const [confirmPwd, setConfirmPwd] = useState('');
     const [showPwd, setShowPwd]   = useState(false);
@@ -24,9 +23,8 @@ const ForgotPassword = () => {
         e.preventDefault();
         setError(''); setLoading(true);
         try {
-            const res = await axios.post('http://localhost:8080/api/users/forgot-password', { email });
-            setDemoToken(res.data.token ?? '');        // demo only – remove in prod
-            setSuccess('Reset token sent! Check your email. In this demo, the token is shown below.');
+            await axios.post('http://localhost:8080/api/users/forgot-password', { email });
+            setSuccess('');
             setStep(2);
         } catch (err) {
             setError(err.response?.data?.error || 'Could not find an account with that email.');
@@ -56,10 +54,7 @@ const ForgotPassword = () => {
         }
     };
 
-    const copyToken = () => {
-        navigator.clipboard.writeText(demoToken);
-        setToken(demoToken);
-    };
+
 
     return (
         <div className="min-h-screen w-screen flex items-center justify-center bg-[#0D0F18] overflow-hidden relative font-sans">
@@ -153,27 +148,15 @@ const ForgotPassword = () => {
                                     <KeyRound className="w-5 h-5 text-cyan-400" /> Enter reset token
                                 </h2>
                                 <p className="text-gray-400 text-sm mt-2 leading-relaxed">
-                                    We sent a token to <span className="text-cyan-400 font-medium">{email}</span>. Enter it below along with your new password.
+                                    We sent a reset token to <span className="text-cyan-400 font-medium">{email}</span>. Check your inbox and enter it below along with your new password.
                                 </p>
                             </div>
 
-                            {/* Demo token reveal box */}
-                            {demoToken && (
-                                <div className="mb-5 bg-cyan-500/8 border border-cyan-500/20 rounded-xl px-4 py-3">
-                                    <p className="text-xs text-cyan-400/70 font-medium mb-1.5 uppercase tracking-wider">📬 Demo Mode — Your Reset Token</p>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <span className="font-mono text-xl font-bold text-cyan-300 tracking-[0.3em]">{demoToken}</span>
-                                        <button
-                                            type="button"
-                                            onClick={copyToken}
-                                            className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-white bg-cyan-500/15 hover:bg-cyan-500/25 px-3 py-1.5 rounded-lg transition-all font-medium border border-cyan-500/20"
-                                        >
-                                            <Copy className="w-3.5 h-3.5" /> Copy & Fill
-                                        </button>
-                                    </div>
-                                    <p className="text-xs text-gray-600 mt-2">In production, this token is only sent via email.</p>
-                                </div>
-                            )}
+                            {/* Email sent confirmation */}
+                            <div className="mb-5 bg-green-500/8 border border-green-500/20 rounded-xl px-4 py-3">
+                                <p className="text-xs text-green-400/70 font-medium mb-1.5 uppercase tracking-wider">📬 Email Sent</p>
+                                <p className="text-sm text-green-300">A reset token has been sent to your email. Please check your inbox (and spam folder) and enter the token below.</p>
+                            </div>
 
                             <form onSubmit={handleReset} className="flex flex-col gap-4">
                                 {/* Token input */}

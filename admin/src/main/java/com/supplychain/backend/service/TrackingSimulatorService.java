@@ -37,6 +37,9 @@ public class TrackingSimulatorService {
     private AiIntegrationService aiIntegrationService;
     
     @Autowired
+    private AlertService alertService;
+    
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
     
     private final ObjectMapper mapper = new ObjectMapper();
@@ -83,6 +86,7 @@ public class TrackingSimulatorService {
                 int riskScore = aiResponse != null && aiResponse.containsKey("risk_score") ? 
                         (int) Math.round(Double.parseDouble(aiResponse.get("risk_score").toString())) : 0;
                 
+                int oldRisk = shipment.getRiskScore() != null ? shipment.getRiskScore() : 0;
                 shipment.setRiskScore(riskScore);
                 
                 if (riskScore > 75) {
@@ -112,6 +116,20 @@ public class TrackingSimulatorService {
                 
                 shipmentRepository.save(shipment);
                 updatesMade = true;
+                
+                // Trigger formal Database Alert if we hit the 45% threshold (And only once per threshold crossing to avoid spam on 2s cycles)
+                if (riskScore >= 45 && oldRisk < 45) {
+                    alertService.generateShipmentAlert(
+                        shipment, 
+                        "admin@supplychain.ai", 
+                        "In-Flight Risk Spike Detected: " + riskScore + "% (Approaching Weather/Traffic Anomaly)"
+                    );
+                    
+                    // Force updates to immediately push to UI without waiting for refresh
+                    List<String> liveAlerts = new ArrayList<>();
+                    liveAlerts.add("DANGER: Risk increased to " + riskScore + "%");
+                    shipment.setRerouteAlertData(mapper.writeValueAsString(liveAlerts));
+                }
                 
                 // Log Risk
                 if (riskScore > 50) {
